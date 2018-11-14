@@ -14,11 +14,14 @@ using KarabinEmbeddedLPRLibrary;
 using System.Net.WebSockets;
 using Microsoft.AspNetCore.Http;
 using System.Threading;
+using System.Text;
 
 namespace PlateReader
 {
     public class Startup
     {
+        private WebSocket _websocket;
+        private WebSocket[] _websockets;
         public string message1;
         KarabinEmbeddedLPR lpr;
         private readonly ILogger _logger;
@@ -32,10 +35,10 @@ namespace PlateReader
             Configuration = configuration;
         }
 
-        void lpr_OnCarReceived(object source, KarabinEmbeddedLPR.CarReceivedEventArgs e)
+        private async void lpr_OnCarReceived(object source, KarabinEmbeddedLPR.CarReceivedEventArgs e)
         {
-            _logger.LogInformation("car received:" + e.GetPlate());
-            message1 = e.GetPlate();
+            var plateNumber = e.GetPlate();
+            await SendPlateNumber(_websocket, plateNumber);
         }
 
         public IConfiguration Configuration { get; }
@@ -72,8 +75,8 @@ namespace PlateReader
             {
                 if (context.WebSockets.IsWebSocketRequest)
                 {
-                    WebSocket webSocket = await context.WebSockets.AcceptWebSocketAsync();
-                    await Echo(webSocket);
+                    _websocket = await context.WebSockets.AcceptWebSocketAsync();
+                    _websockets.Append(_websocket);
                 }
                 else
                 {
@@ -87,51 +90,16 @@ namespace PlateReader
 
         });
 
-            // app.UseHttpsRedirection();
-            // app.UseMvc();
-
-
         }
 
-        // private async Task Echo(HttpContext context, WebSocket webSocket)
-        // {
-        //     var buffer = new byte[1024 * 4];
-        //     WebSocketReceiveResult result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-        //     while (!result.CloseStatus.HasValue)
-        //     {
-        //         await webSocket.SendAsync(new ArraySegment<byte>(buffer, 0, result.Count), result.MessageType, result.EndOfMessage, CancellationToken.None);
-
-        //         result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-        //     }
-        //     await webSocket.CloseAsync(result.CloseStatus.Value, result.CloseStatusDescription, CancellationToken.None);
-        // }
-
-
-
-        public async Task Echo(WebSocket webSocket)
+        public async Task SendPlateNumber(WebSocket webSocket, string plateNumber)
         {
-            var buffer = new ArraySegment<byte>(new byte[8192]);
-            for (; ; )
-            {
-                var result = await webSocket.ReceiveAsync(
-                    buffer,
-                    CancellationToken.None);
-
-                if (result.MessageType == WebSocketMessageType.Close)
-                {
-                    return;
-                }
-                else if (result.MessageType == WebSocketMessageType.Text)
-                {
-                    Console.WriteLine("{0}", message1);
-                }
-
-                await webSocket.SendAsync(
-                    new ArraySegment<byte>(buffer.Array, 0, result.Count),
-                    result.MessageType,
-                    result.EndOfMessage,
-                    CancellationToken.None);
-            }
+            var token = CancellationToken.None;
+            var plateData = Encoding.UTF8.GetBytes(plateNumber);
+            var buffer = new ArraySegment<byte>(plateData);
+            // send to all opened websocket
+            await Task.WhenAll(_websockets.Where(s => s.State == WebSocketState.Open)
+                       .Select(s => s.SendAsync(buffer, WebSocketMessageType.Text, true, token)));
         }
     }
 }
