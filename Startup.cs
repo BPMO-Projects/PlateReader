@@ -15,13 +15,18 @@ using System.Net.WebSockets;
 using Microsoft.AspNetCore.Http;
 using System.Threading;
 using System.Text;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Attributes;
+using MongoDB.Driver;
+using MongoDB.Driver.Builders;
 
 namespace PlateReader
 {
     public class Startup
     {
         private WebSocket _websocket;
-        private WebSocket[] _websockets;
+        private PlateReaderDb _plateReaderDb;
+        // private WebSocket[] _websockets;
         public string message1;
         KarabinEmbeddedLPR lpr;
         private readonly ILogger _logger;
@@ -29,6 +34,7 @@ namespace PlateReader
         {
             lpr = new KarabinEmbeddedLPR();
             lpr.OnCarReceived += new KarabinEmbeddedLPR.CarReceivedEvent(lpr_OnCarReceived);
+            _plateReaderDb = new PlateReaderDb();
             _logger = logger;
             bool result = lpr.Connect("192.168.12.46", "usertest", "123456", 8091);
             _logger.LogInformation(result.ToString());
@@ -38,7 +44,11 @@ namespace PlateReader
         private async void lpr_OnCarReceived(object source, KarabinEmbeddedLPR.CarReceivedEventArgs e)
         {
             var plateNumber = e.GetPlate();
-            await SendPlateNumber(_websocket, plateNumber);
+            _plateReaderDb.Create(new Plate()
+            {
+                plateNumber = plateNumber
+            });
+            await SendPlateNumber(plateNumber);
         }
 
         public IConfiguration Configuration { get; }
@@ -70,36 +80,97 @@ namespace PlateReader
             };
             app.UseWebSockets(webSocketOptions);
             app.Use(async (context, next) =>
-        {
-            if (context.Request.Path == "/ws")
-            {
-                if (context.WebSockets.IsWebSocketRequest)
                 {
-                    _websocket = await context.WebSockets.AcceptWebSocketAsync();
-                    _websockets.Append(_websocket);
-                }
-                else
-                {
-                    context.Response.StatusCode = 400;
-                }
-            }
-            else
-            {
-                await next();
-            }
+                    if (context.Request.Path == "/ws")
+                    {
+                        if (context.WebSockets.IsWebSocketRequest)
+                        {
+                            _websocket = await context.WebSockets.AcceptWebSocketAsync();
+                            await Echo(context, _websocket);
+                        }
+                        else
+                        {
+                            context.Response.StatusCode = 400;
+                        }
+                    }
+                    else
+                    {
+                        await next();
+                    }
 
-        });
-
+                });
         }
 
-        public async Task SendPlateNumber(WebSocket webSocket, string plateNumber)
+        private async Task Echo(HttpContext context, WebSocket webSocket)
+        {
+            var buffer = new byte[1024 * 4];
+            WebSocketReceiveResult result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+            while (!result.CloseStatus.HasValue)
+            {
+                await webSocket.SendAsync(new ArraySegment<byte>(buffer, 0, result.Count), result.MessageType, result.EndOfMessage, CancellationToken.None);
+
+                result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+            }
+            await webSocket.CloseAsync(result.CloseStatus.Value, result.CloseStatusDescription, CancellationToken.None);
+        }
+
+        public async Task SendPlateNumber(string plateNumber)
         {
             var token = CancellationToken.None;
             var plateData = Encoding.UTF8.GetBytes(plateNumber);
             var buffer = new ArraySegment<byte>(plateData);
-            // send to all opened websocket
-            await Task.WhenAll(_websockets.Where(s => s.State == WebSocketState.Open)
-                       .Select(s => s.SendAsync(buffer, WebSocketMessageType.Text, true, token)));
+            await _websocket.SendAsync(buffer, WebSocketMessageType.Text, true, token);
         }
+    }
+    public class Plate
+    {
+        public ObjectId Id { get; set; }
+        [BsonElement("Id")]
+        public string plateNumber { get; set; }
+    }
+    public class PlateReaderDb
+    {
+        MongoClient _client;
+        MongoDatabase _db;
+
+        public PlateReaderDb()
+        {
+            var mongoUrl = new MongoUrl("mongodb://localhost:27017/PlateReader");
+            _client = new MongoClient(mongoUrl);
+            _db =_client.GetServer().GetDatabase(mongoUrl.DatabaseName);
+            // books below is an IMongoCollection
+            // var Plate = db.GetCollection<Plate>("Plates");
+        }
+
+        public IEnumerable<Plate> GetPlates()
+        {
+            return _db.GetCollection<Plate>("Plates").FindAll();
+        }
+
+
+        public Plate GetPlate(ObjectId id)
+        {
+            var res = Query<Plate>.EQ(p => p.Id, id);
+            return _db.GetCollection<Plate>("Plates").FindOne(res);
+        }
+
+        public Plate Create(Plate p)
+        {
+            _db.GetCollection<Plate>("Plates").Save(p);
+            return p;
+        }
+
+        // public void Update(ObjectId id, Plate p)
+        // {
+        //     p.Id = id;
+        //     var res = Query<Plate>.EQ(pd => pd.Id, id);
+        //     var operation = Update<Plate>.Replace(p);
+        //     _db.GetCollection<Plate>("Plate").Update(res, operation);
+        // }
+        // public void Remove(ObjectId id)
+        // {
+        //     var res = Query<Plate>.EQ(e => e.Id, id);
+        //     var operation = _db.GetCollection<Plate>("Plate").Remove(res);
+        // }
     }
 }
