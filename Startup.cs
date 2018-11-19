@@ -137,7 +137,7 @@ namespace PlateReader
         {
             var mongoUrl = new MongoUrl("mongodb://localhost:27017/PlateReader");
             _client = new MongoClient(mongoUrl);
-            _db =_client.GetServer().GetDatabase(mongoUrl.DatabaseName);
+            _db = _client.GetServer().GetDatabase(mongoUrl.DatabaseName);
             // books below is an IMongoCollection
             // var Plate = db.GetCollection<Plate>("Plates");
         }
