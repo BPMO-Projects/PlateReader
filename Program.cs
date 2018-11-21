@@ -14,7 +14,7 @@ namespace PlateReader
     {
         public static void Main(string[] args)
         {
-            CreateWebHostBuilder(args).UseUrls("http://localhost:6001/").Build().Run();
+            CreateWebHostBuilder(args).UseUrls("http://localhost:3003/").Build().Run();
         }
 
         public static IWebHostBuilder CreateWebHostBuilder(string[] args) =>

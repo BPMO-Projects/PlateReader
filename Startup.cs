@@ -19,6 +19,8 @@ using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 using MongoDB.Driver;
 using MongoDB.Driver.Builders;
+using MD.PersianDateTime.Core;
+using System.Globalization;
 
 namespace PlateReader
 {
@@ -44,11 +46,46 @@ namespace PlateReader
         private async void lpr_OnCarReceived(object source, KarabinEmbeddedLPR.CarReceivedEventArgs e)
         {
             var plateNumber = e.GetPlate();
+            await SendPlateNumber(plateNumber);
+
+                        var data = e.GetData();
+
+            string[] words = data.Split('_', '~');
+             var date = words[1];
+            //  _logger.LogInformation("date:"+ date);
+
+             var CameraCode = words[2];
+            //  _logger.LogInformation("CameraCode:"+ CameraCode);
+
+              var UpdateCount = words[4];
+            //  _logger.LogInformation("Updatecount:"+ UpdateCount);
+
+
+            // foreach (var word in words)
+            // {
+            //     System.Console.WriteLine($"<{word}>");
+            // }
+            // _logger.LogInformation("data:"+data);
+
+            // var persianDateTime = new PersianDateTime(DateTime.Now);
+            //              _logger.LogInformation("farsiDate:"+ persianDateTime);
+
+            DateTime dt = 
+                DateTime.ParseExact(date, "yyyy-M-d-H-m-s", CultureInfo.InvariantCulture);
+            System.Console.WriteLine(dt);
+
+
+            PersianDateTime persianDate = new PersianDateTime(dt);
+            System.Console.WriteLine("FINALL DATE:"+persianDate);
+
+
             _plateReaderDb.Create(new Plate()
             {
-                plateNumber = plateNumber
+                plateNumber = plateNumber,
+                date = persianDate.ToString(),
+                CameraCode = CameraCode ,
+                UpdateCount = UpdateCount
             });
-            await SendPlateNumber(plateNumber);
         }
 
         public IConfiguration Configuration { get; }
@@ -125,8 +162,11 @@ namespace PlateReader
     public class Plate
     {
         public ObjectId Id { get; set; }
-        [BsonElement("Id")]
+        // [BsonElement("Id")]
         public string plateNumber { get; set; }
+        public String date { get; set; }
+        public string CameraCode { get; set; }
+        public string UpdateCount { get; set; }
     }
     public class PlateReaderDb
     {
@@ -135,7 +175,7 @@ namespace PlateReader
 
         public PlateReaderDb()
         {
-            var mongoUrl = new MongoUrl("mongodb://localhost:27017/PlateReader");
+            var mongoUrl = new MongoUrl("mongodb://10.1.40.28:27017/PlateReader");
             _client = new MongoClient(mongoUrl);
             _db = _client.GetServer().GetDatabase(mongoUrl.DatabaseName);
             // books below is an IMongoCollection

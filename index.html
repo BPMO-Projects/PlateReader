@@ -52,7 +52,8 @@
         var scheme = document.location.protocol === "https:" ? "wss" : "ws";
         var port = document.location.port ? (":" + document.location.port) : "";
 
-        connectionUrl.value = scheme + "://" + document.location.hostname + port + "/ws" ;
+        // connectionUrl.value = scheme + "://" + document.location.hostname + port + "/ws" ;
+         connectionUrl.value = "http://10.1.1.173:3003/ws" ;
 
         function updateState() {
             function disable() {

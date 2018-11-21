@@ -188,7 +188,7 @@ namespace KarabinEmbeddedLPRLibrary
                 {
                     plateImage = this.ByteToImage(stream2.ToArray());
                 }
-                this._OnCarReceived(this, new CarReceivedEventArgs(plate, carImage, plateImage));
+                this._OnCarReceived(this, new CarReceivedEventArgs(plate, carImage, plateImage,str2));
             }
         }
         
@@ -261,12 +261,16 @@ namespace KarabinEmbeddedLPRLibrary
         public class CarReceivedEventArgs : EventArgs
         {
             private string Plate;
+            private string Data;
+
             private Bitmap CarImage;
             private Bitmap PlateImage;
             
-            public CarReceivedEventArgs(string plate, Bitmap carImage, Bitmap plateImage)
+            public CarReceivedEventArgs(string plate, Bitmap carImage, Bitmap plateImage,string data)
             {
                 this.Plate = plate;
+                                this.Data = data;
+
                 this.CarImage = carImage;
                 this.PlateImage = plateImage;
             }
@@ -279,6 +283,10 @@ namespace KarabinEmbeddedLPRLibrary
             public string GetPlate()
             {
                 return this.Plate;
+            }
+           public string GetData()
+            {
+                return this.Data;
             }
             
             public Bitmap GetPlateImage()
