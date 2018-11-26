@@ -21,6 +21,8 @@ using MongoDB.Driver;
 using MongoDB.Driver.Builders;
 using MD.PersianDateTime.Core;
 using System.Globalization;
+using Microsoft.AspNetCore.HttpOverrides;
+using System.Net;
 
 namespace PlateReader
 {
@@ -46,9 +48,12 @@ namespace PlateReader
         private async void lpr_OnCarReceived(object source, KarabinEmbeddedLPR.CarReceivedEventArgs e)
         {
             var plateNumber = e.GetPlate();
-            await SendPlateNumber(plateNumber);
+            System.Console.WriteLine("ShomarehPelak:"+ plateNumber);
+            
+            if(_websocket != null){await SendPlateNumber(plateNumber);}
+            
 
-                        var data = e.GetData();
+            var data = e.GetData();
 
             string[] words = data.Split('_', '~');
              var date = words[1];
@@ -95,11 +100,24 @@ namespace PlateReader
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddMvc().SetCompatibilityVersion(CompatibilityVersion.Version_2_1);
+            services.Configure<ForwardedHeadersOptions>(options =>
+                {
+                    options.KnownProxies.Add(IPAddress.Parse("10.1.1.173"));
+                });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IHostingEnvironment env)
         {
+            app.UseDefaultFiles();
+            app.UseStaticFiles();
+            app.UseForwardedHeaders(new ForwardedHeadersOptions
+                {
+                    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+                });
+
+                app.UseAuthentication();
+
             if (env.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
@@ -175,7 +193,7 @@ namespace PlateReader
 
         public PlateReaderDb()
         {
-            var mongoUrl = new MongoUrl("mongodb://10.1.40.28:27017/PlateReader");
+            var mongoUrl = new MongoUrl("mongodb://localhost:27017/PlateReader");
             _client = new MongoClient(mongoUrl);
             _db = _client.GetServer().GetDatabase(mongoUrl.DatabaseName);
             // books below is an IMongoCollection
